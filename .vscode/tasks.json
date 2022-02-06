@@ -1,0 +1,35 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "cppbuild",
+			"label": "C/C++: clang++ compilar archivo activo XXX",
+			"command": "/usr/bin/clang++",
+			"args": [
+			
+				"-std=c++1z",
+				"-stdlib=libc++",
+				"-lgmpxx",
+				"-lgmp",
+				"-fdiagnostics-color=always",
+				"--include-directory=/opt/homebrew/include",
+				"-L/opt/homebrew/lib",
+				"-g",
+				"${file}",
+				"-o",
+				"${fileDirname}/${fileBasenameNoExtension}.out"
+			],
+			"options": {
+				"cwd": "${fileDirname}"
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"detail": "compilador: /usr/bin/clang++"
+		}
+	]
+}
