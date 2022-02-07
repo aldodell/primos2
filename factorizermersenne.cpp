@@ -20,7 +20,7 @@ void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int
     unsigned int p2 = 2 * p;
     unsigned int p1 = p + 1;
 
-    //initial settings
+    // initial settings
     mpz_init_set(a, begin.get_mpz_t());
     mpz_init_set(end, final.get_mpz_t());
     mpz_init_set_ui(b, 0);
@@ -29,14 +29,14 @@ void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int
     mpz_init_set_ui(tmp, 0);
     mpz_init_set_ui(root, 0);
 
-    //set root
+    // set root
     mpz_ui_pow_ui(root, 2, p);
     mpz_sub_ui(root, root, 1);
     mpz_sqrt(root, root);
     mpz_sub_ui(root, root, 1);
     mpz_div_ui(root, root, p2);
 
-    //If begin > root, exit now!!!
+    // If begin > root, exit now!!!
     if (mpz_cmp(begin.get_mpz_t(), root) > 0)
     {
         /*
@@ -51,17 +51,17 @@ void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int
     gmp_printf("\ninit: %Zd / final:%Zd\n", begin.get_mpz_t(), final.get_mpz_t());
     mtx.unlock();
 
-    //set alfa:
+    // set alfa:
     mpz_ui_pow_ui(alfa, 2, p);  // alfa = 2^p
-    mpz_sub_ui(alfa, alfa, 2);  //alfa = alfa - 2
-    mpz_div_ui(alfa, alfa, p2); //alfa = alfa / 2p
-    mpz_sub_ui(alfa, alfa, 1);  //alfa = alfa -1
+    mpz_sub_ui(alfa, alfa, 2);  // alfa = alfa - 2
+    mpz_div_ui(alfa, alfa, p2); // alfa = alfa / 2p
+    mpz_sub_ui(alfa, alfa, 1);  // alfa = alfa -1
 
-    //set beta:
-    mpz_set_ui(beta, p2);      //beta = 2p
-    mpz_add_ui(beta, beta, 1); //beta = beta +1
+    // set beta:
+    mpz_set_ui(beta, p2);      // beta = 2p
+    mpz_add_ui(beta, beta, 1); // beta = beta +1
 
-    //take time
+    // take time
     auto start = high_resolution_clock::now();
     int z = 0;
 
@@ -83,11 +83,11 @@ void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int
         }
 
         // mpz_sub_ui(alfa, alfa, p2);
-        mpz_sub_ui(alfa, alfa, 1); //Experimental
+        mpz_sub_ui(alfa, alfa, 1); // Experimental
         mpz_add_ui(beta, beta, betaDiff);
         mpz_add_ui(a, a, 1);
 
-        //Reach square root or beyond final mileston
+        // Reach square root or beyond final mileston
         if (mpz_cmp(a, root) > 0 || mpz_cmp(a, end) > 0 || done)
         {
             mtx.lock();
@@ -113,14 +113,98 @@ void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int
     // mpz_clears(a, b, alfa, beta, betaDiff, tmp);
 }
 
+bool isDivisible(mpz_t a, mpz_t b)
+{
+    // MULTIPLY B BY TO HOW MANY TIMES FITS ON A
+    mpz_t q, r;
+    mpz_init_set(q, b);
+    mpz_init(r);
+
+    while (mpz_cmp(q, a) < 0)
+    {
+        mpz_set(r, q);
+        mpz_mul_2exp(q, q, 1);
+    }
+
+    // subtract a - r;
+    mpz_sub(a, a, r);
+
+    // substract a - b
+    while (mpz_cmp_ui(a, 0) > 0)
+    {
+        mpz_sub(a, a, b);
+    }
+
+    gmp_printf("%Zd", a);
+    return false;
+}
+
+bool test(unsigned int p, mpz_t fa, mpz_t fb)
+{
+
+    mpz_t r;
+    mpz_init_set_ui(r, 0);
+
+    int k = 0; // carry
+    int i, j, ij, ij1;
+    unsigned int sizea, sizeb;
+    sizea = mpz_sizeinbase(fa, 2);
+    sizeb = mpz_sizeinbase(fb, 2);
+
+    for (i = 0; i < sizeb; i++)
+    {
+        if (mpz_tstbit(fb, i))
+        {
+            for (j = 0; j < sizea; j++)
+            {
+                ij = i + j;
+                ij1 = i + j + 1;
+                if (mpz_tstbit(fa, j))
+                {
+                    if (!mpz_tstbit(r, ij))
+                    {
+                        mpz_setbit(r, ij);
+                    }
+                    else
+                    {
+                        mpz_clrbit(r, ij);
+                        k = 1;
+                    }
+                }
+
+                if (k)
+                {
+
+                    if (!mpz_tstbit(r, ij1))
+                    {
+                        mpz_setbit(r, ij1);
+                        k = 0;
+                    }
+                    else
+                    {
+                        mpz_clrbit(r, ij1);
+                        k = 1;
+                    }
+                }
+            }
+        }
+
+        if (!mpz_tstbit(r, i))
+            return false;
+    }
+    gmp_printf("%Zd\n", r);
+    bool z = mpz_popcount(r) == p;
+    return z;
+}
+
 /**
  * @brief Multiplica fa x fb en un array de p bits para evaluar si es un mersenne
- * 
- * @param p 
- * @param fa 
- * @param fb 
- * @return true 
- * @return false 
+ *
+ * @param p
+ * @param fa
+ * @param fb
+ * @return true Si fa*fb = 2^p-1 es Mersenne (no necesariamente primo)
+ * @return false Si fa*fb 2^p-1 no es Mersenne.
  */
 bool test(unsigned int p, unsigned int fa, unsigned int fb)
 {
@@ -130,9 +214,9 @@ bool test(unsigned int p, unsigned int fa, unsigned int fb)
 
     r.resize(p, 0);
 
-    int k = 0; //carry
+    int k = 0; // carry
 
-    //cast to binary
+    // cast to binary
     int t = fa;
     while (t > 0)
     {
@@ -197,7 +281,13 @@ bool test(unsigned int p, unsigned int fa, unsigned int fb)
 int main(int argc, char const *argv[])
 {
 
-    test(11, 23, 89);
+    // test(11, 23, 89);
+    mpz_class fa, fb;
+    fa = 23;
+    fb = 89;
+    bool ss = isDivisible(fb.get_mpz_t(), fa.get_mpz_t());
+
+    test(11, fa.get_mpz_t(), fb.get_mpz_t());
 
     int MAX_THREADS = 4;
 
@@ -211,7 +301,7 @@ int main(int argc, char const *argv[])
     mpz_class begin, final, THRESHOLD, OMEGA;
     bool done = false;
 
-    //Mersenne number.. and OMEGA: root(2^p-2/(2p))
+    // Mersenne number.. and OMEGA: root(2^p-2/(2p))
     mpz_ui_pow_ui(OMEGA.get_mpz_t(), 2, p);
     mpz_sub_ui(OMEGA.get_mpz_t(), OMEGA.get_mpz_t(), 1);
     mpz_sqrt(OMEGA.get_mpz_t(), OMEGA.get_mpz_t());
@@ -222,7 +312,7 @@ int main(int argc, char const *argv[])
     mpz_set_ui(begin.get_mpz_t(), 1);
     mpz_add(final.get_mpz_t(), begin.get_mpz_t(), THRESHOLD.get_mpz_t());
 
-    //factorize(p, begin, final, done, threadsCounter);
+    // factorize(p, begin, final, done, threadsCounter);
 
     vector<thread> threads;
 
