@@ -14,7 +14,9 @@ mutex mtx;
 void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int &threadsCounter)
 {
 
-    mpz_t a, b, alfa, beta, tmp, root, end;
+    threadsCounter++; // Increment counter
+
+    mpz_t a, b, alfa, beta, tmp, root, end, offsetBeta;
     unsigned int betaDiff, n;
     betaDiff = p * 2;
     unsigned int p2 = 2 * p;
@@ -28,6 +30,7 @@ void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int
     mpz_init_set_ui(beta, 0);
     mpz_init_set_ui(tmp, 0);
     mpz_init_set_ui(root, 0);
+    mpz_init_set_ui(offsetBeta, 0);
 
     // set root
     mpz_ui_pow_ui(root, 2, p);
@@ -39,27 +42,32 @@ void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int
     // If begin > root, exit now!!!
     if (mpz_cmp(begin.get_mpz_t(), root) > 0)
     {
-        /*
+
+/*
         mtx.lock();
-        gmp_printf("Root reached before start on a thread!\n");
+        gmp_printf("Root reached before start on a thread! Begin: %Zd Final: %Zd\n", begin.get_mpz_t(), final.get_mpz_t());
         mtx.unlock();
-        */
+*/
+        threadsCounter--;
         return;
     }
-
-    mtx.lock();
-    gmp_printf("\ninit: %Zd / final:%Zd\n", begin.get_mpz_t(), final.get_mpz_t());
-    mtx.unlock();
 
     // set alfa:
     mpz_ui_pow_ui(alfa, 2, p);  // alfa = 2^p
     mpz_sub_ui(alfa, alfa, 2);  // alfa = alfa - 2
     mpz_div_ui(alfa, alfa, p2); // alfa = alfa / 2p
-    mpz_sub_ui(alfa, alfa, 1);  // alfa = alfa -1
+    mpz_sub(alfa, alfa, a);     // alfa = alfa - a
 
     // set beta:
     mpz_set_ui(beta, p2);      // beta = 2p
     mpz_add_ui(beta, beta, 1); // beta = beta +1
+    mpz_mul_ui(offsetBeta, a, p2);
+    mpz_sub_ui(offsetBeta, offsetBeta, p2);
+    mpz_add(beta, beta, offsetBeta);
+
+    mtx.lock();
+    gmp_printf("\nalfa: %Zd / beta:%Zd /a:%Zd /b:%Zd\n", alfa, beta, a, b);
+    mtx.unlock();
 
     // take time
     auto start = high_resolution_clock::now();
@@ -67,16 +75,17 @@ void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int
 
     while (!done)
     {
-
         if (mpz_divisible_p(alfa, beta) != 0)
         {
             done = true;
             mpz_div(b, alfa, beta);
+
             mtx.lock();
             gmp_printf("\na: %Zd\nb: %Zd\n", a, b);
             auto stop = high_resolution_clock::now();
             auto duration = duration_cast<seconds>(stop - start);
             printf("\ntime: %llu\n", duration.count());
+            threadsCounter--;
             mtx.unlock();
 
             break;
@@ -96,8 +105,9 @@ void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int
             mtx.unlock();
             break;
         }
+
         z++;
-        if (z == 1000000)
+        if (z == 500000000)
         {
 
             mtx.lock();
@@ -105,7 +115,7 @@ void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int
             auto stop = high_resolution_clock::now();
             auto duration = duration_cast<milliseconds>(stop - start);
             start = high_resolution_clock::now();
-            printf("\ntime: %llu\n", duration.count());
+            gmp_printf("\ntime: %llu\na:%Zd", duration.count(), a);
             mtx.unlock();
         }
     }
@@ -281,20 +291,22 @@ bool test(unsigned int p, unsigned int fa, unsigned int fb)
 int main(int argc, char const *argv[])
 {
 
-    // test(11, 23, 89);
+    /*
+     test(11, 23, 89);
     mpz_class fa, fb;
     fa = 23;
     fb = 89;
     bool ss = isDivisible(fb.get_mpz_t(), fa.get_mpz_t());
 
     test(11, fa.get_mpz_t(), fb.get_mpz_t());
+    */
 
     int MAX_THREADS = 4;
 
     int threadsCounter = 0;
     unsigned int p, i, q;
     p = (unsigned int)atoi(argv[1]);
-    q = (unsigned int)atoi(argv[1]);
+    q = (unsigned int)atoi(argv[2]);
 
     MAX_THREADS = q;
 
@@ -303,16 +315,13 @@ int main(int argc, char const *argv[])
 
     // Mersenne number.. and OMEGA: root(2^p-2/(2p))
     mpz_ui_pow_ui(OMEGA.get_mpz_t(), 2, p);
-    mpz_sub_ui(OMEGA.get_mpz_t(), OMEGA.get_mpz_t(), 1);
-    mpz_sqrt(OMEGA.get_mpz_t(), OMEGA.get_mpz_t());
-    mpz_div_ui(OMEGA.get_mpz_t(), OMEGA.get_mpz_t(), (2 * p));
-
+    mpz_sub_ui(OMEGA.get_mpz_t(), OMEGA.get_mpz_t(), 2);
+    // mpz_sqrt(OMEGA.get_mpz_t(), OMEGA.get_mpz_t());
+    mpz_div_ui(OMEGA.get_mpz_t(), OMEGA.get_mpz_t(), 2 * p);
+    // split bby threads numbers
     mpz_div_ui(THRESHOLD.get_mpz_t(), OMEGA.get_mpz_t(), MAX_THREADS);
-
     mpz_set_ui(begin.get_mpz_t(), 1);
     mpz_add(final.get_mpz_t(), begin.get_mpz_t(), THRESHOLD.get_mpz_t());
-
-    // factorize(p, begin, final, done, threadsCounter);
 
     vector<thread> threads;
 
@@ -325,9 +334,11 @@ int main(int argc, char const *argv[])
                 break;
             }
             threads.push_back(thread(factorize, p, begin, final, ref(done), ref(threadsCounter)));
-            threadsCounter++;
             mpz_add_ui(begin.get_mpz_t(), final.get_mpz_t(), 1);
             mpz_add(final.get_mpz_t(), final.get_mpz_t(), THRESHOLD.get_mpz_t());
+            mtx.lock();
+            gmp_printf("\nThreads counter: %d\n", threadsCounter);
+            mtx.unlock();
         }
     }
 
