@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${fileDirname}/${fileBasenameNoExtension}",
             "args": [
-                "101",
+                "11",
                 "2"
             ],
             "stopAtEntry": false,

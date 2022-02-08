@@ -29,28 +29,7 @@ void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int
     mpz_init_set_ui(alfa, 0);
     mpz_init_set_ui(beta, 0);
     mpz_init_set_ui(tmp, 0);
-    mpz_init_set_ui(root, 0);
     mpz_init_set_ui(offsetBeta, 0);
-
-    // set root
-    mpz_ui_pow_ui(root, 2, p);
-    mpz_sub_ui(root, root, 1);
-    mpz_sqrt(root, root);
-    mpz_sub_ui(root, root, 1);
-    mpz_div_ui(root, root, p2);
-
-    // If begin > root, exit now!!!
-    if (mpz_cmp(begin.get_mpz_t(), root) > 0)
-    {
-
-/*
-        mtx.lock();
-        gmp_printf("Root reached before start on a thread! Begin: %Zd Final: %Zd\n", begin.get_mpz_t(), final.get_mpz_t());
-        mtx.unlock();
-*/
-        threadsCounter--;
-        return;
-    }
 
     // set alfa:
     mpz_ui_pow_ui(alfa, 2, p);  // alfa = 2^p
@@ -59,11 +38,11 @@ void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int
     mpz_sub(alfa, alfa, a);     // alfa = alfa - a
 
     // set beta:
-    mpz_set_ui(beta, p2);      // beta = 2p
-    mpz_add_ui(beta, beta, 1); // beta = beta +1
-    mpz_mul_ui(offsetBeta, a, p2);
+    mpz_set_ui(beta, p2);          // beta = 2p
+    mpz_add_ui(beta, beta, 1);     // beta = beta +1
+    mpz_mul_ui(offsetBeta, a, p2); // offsetBeta = (a-1)*2*p
     mpz_sub_ui(offsetBeta, offsetBeta, p2);
-    mpz_add(beta, beta, offsetBeta);
+    mpz_add(beta, beta, offsetBeta); // beta = beta + betaOffset
 
     mtx.lock();
     gmp_printf("\nalfa: %Zd / beta:%Zd /a:%Zd /b:%Zd\n", alfa, beta, a, b);
@@ -92,12 +71,12 @@ void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int
         }
 
         // mpz_sub_ui(alfa, alfa, p2);
-        mpz_sub_ui(alfa, alfa, 1); // Experimental
+        mpz_sub_ui(alfa, alfa, 1);
         mpz_add_ui(beta, beta, betaDiff);
         mpz_add_ui(a, a, 1);
 
         // Reach square root or beyond final mileston
-        if (mpz_cmp(a, root) > 0 || mpz_cmp(a, end) > 0 || done)
+        if (mpz_cmp(a, end) > 0 || done)
         {
             mtx.lock();
             gmp_printf("\nFinish: init: %Zd / final:%Zd\n", begin.get_mpz_t(), final.get_mpz_t());
@@ -310,37 +289,47 @@ int main(int argc, char const *argv[])
 
     MAX_THREADS = q;
 
-    mpz_class begin, final, THRESHOLD, OMEGA;
+    mpz_class begin, final, THRESHOLD, MERSENNE, ROOT;
     bool done = false;
 
     // Mersenne number.. and OMEGA: root(2^p-2/(2p))
-    mpz_ui_pow_ui(OMEGA.get_mpz_t(), 2, p);
-    mpz_sub_ui(OMEGA.get_mpz_t(), OMEGA.get_mpz_t(), 2);
-    // mpz_sqrt(OMEGA.get_mpz_t(), OMEGA.get_mpz_t());
-    mpz_div_ui(OMEGA.get_mpz_t(), OMEGA.get_mpz_t(), 2 * p);
+    mpz_ui_pow_ui(MERSENNE.get_mpz_t(), 2, p);
+    mpz_sub_ui(MERSENNE.get_mpz_t(), MERSENNE.get_mpz_t(), 1);
+    mpz_sqrt(ROOT.get_mpz_t(), MERSENNE.get_mpz_t());
+
     // split bby threads numbers
-    mpz_div_ui(THRESHOLD.get_mpz_t(), OMEGA.get_mpz_t(), MAX_THREADS);
-    mpz_set_ui(begin.get_mpz_t(), 1);
-    mpz_add(final.get_mpz_t(), begin.get_mpz_t(), THRESHOLD.get_mpz_t());
+    mpz_div_ui(THRESHOLD.get_mpz_t(), ROOT.get_mpz_t(), MAX_THREADS);
+    mpz_set_ui(begin.get_mpz_t(), 1);                                     // first "A"
+    mpz_add(final.get_mpz_t(), begin.get_mpz_t(), THRESHOLD.get_mpz_t()); // Last "A"
 
     vector<thread> threads;
 
-    while (!done)
-    {
-        while (threadsCounter < MAX_THREADS)
+    /*
+        while (!done)
         {
-            if (done)
+            while (threadsCounter < MAX_THREADS)
             {
-                break;
-            }
-            threads.push_back(thread(factorize, p, begin, final, ref(done), ref(threadsCounter)));
-            mpz_add_ui(begin.get_mpz_t(), final.get_mpz_t(), 1);
-            mpz_add(final.get_mpz_t(), final.get_mpz_t(), THRESHOLD.get_mpz_t());
-            mtx.lock();
-            gmp_printf("\nThreads counter: %d\n", threadsCounter);
-            mtx.unlock();
-        }
+                if (done)
+                {
+                    break;
+                }
+    */
+
+    for (int i = 0; i < MAX_THREADS; i++)
+    {
+        threads.push_back(thread(factorize, p, begin, final, ref(done), ref(threadsCounter)));
+        mpz_add_ui(begin.get_mpz_t(), final.get_mpz_t(), 1);
+        mpz_add(final.get_mpz_t(), final.get_mpz_t(), THRESHOLD.get_mpz_t());
+        /*
+        mtx.lock();
+        gmp_printf("\nThreads counter: %d\n", threadsCounter);
+        mtx.unlock();
+        */
     }
+    /*
+}
+}
+*/
 
     for (auto &th : threads)
     {
