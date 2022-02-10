@@ -5,15 +5,397 @@
 #include <vector>
 #include <mutex>
 #include <bitset>
+#include <cmath>
 
 using namespace std;
 using namespace chrono;
 
 mutex mtx;
 
-void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int &threadsCounter)
+void factorize4(unsigned int p)
 {
 
+    unsigned long long fa, b, t, fa2, x, r, i, z, root, m;
+    fa = 1;
+    m = pow(2, p) - 1;
+    root = sqrt(m);
+
+    while (true)
+    {
+    begin:
+        fa += (2 * p);
+        b = 1;
+        t = fa; // asumiendo que el multicando termina en 1
+        x = 0;
+        r = 1;
+        while (true)
+        {
+            // numero de desplazamientos
+            x++;
+            b <<= 1;
+
+            // no pas'o la prueba
+            if ((t & b) == 0)
+            {
+                fa2 = fa << x;
+                t = t + fa2;
+                r = r + (1 << x);
+                if (t > m)
+                    goto begin;
+            }
+            z = 0;
+            for (i = 0; i < p; i++)
+            {
+
+                if ((t & (1 << i)))
+                {
+                    z++;
+                }
+            }
+            if (z == p)
+            {
+                printf("%llu\n", fa);
+                return;
+            }
+        }
+    }
+}
+
+void factorize3(int p)
+{
+    mpz_t alfa, beta, alfa2, a, b, t, t2, progress, thresold;
+    mpz_init(alfa);
+    mpz_init(beta);
+    mpz_init(alfa2);
+    mpz_init(a);
+    mpz_init(b);
+    mpz_init(t);
+    mpz_init(t2);
+    mpz_init(progress);
+    mpz_init(thresold);
+
+    // init alfa:
+    mpz_ui_pow_ui(alfa, 2, p);
+    mpz_sub_ui(alfa, alfa, 2);
+    mpz_div_ui(alfa, alfa, 2 * p);
+    mpz_sub_ui(alfa, alfa, 1);
+    mpz_set(alfa2, alfa);
+
+    // init beta:
+    int p2 = 2 * p;
+    mpz_set_ui(beta, 2 * p + 1);
+
+    // init a
+    mpz_set_ui(a, 1);
+    int q;
+
+    // setup progress
+    mpz_set_ui(thresold, 1000);
+    mpz_add_ui(progress, thresold, 0);
+    printf("\n[");
+
+    while (true)
+    {
+        // Evaluate if beta | alfa
+        while (true)
+        {
+            mpz_set(t, beta);
+            mpz_set(t2, t);
+            while (mpz_cmp(t2, alfa2) < 0)
+            {
+                mpz_set(t, t2);
+                mpz_mul_2exp(t2, t2, 1);
+            }
+
+            q = mpz_cmp(alfa2, t);
+            mpz_sub(alfa2, alfa2, t);
+            if (q < 0)
+            {
+                break;
+            }
+            else if (q == 0)
+            {
+                gmp_printf("]\n\na=%Zd\n", a);
+                return;
+            }
+        }
+
+        mpz_sub_ui(alfa, alfa, 1);
+        mpz_set(alfa2, alfa);
+        mpz_add_ui(beta, beta, p2);
+        mpz_add_ui(a, a, 1);
+        if (mpz_cmp(a, progress) == 0)
+        {
+            // mtx.lock();
+            gmp_printf("*");
+            mpz_add(progress, progress, thresold);
+            // mtx.unlock();
+        }
+    }
+}
+
+/*
+q = mpz_cmp(alfa2, beta);
+            if (q < 0)
+            {
+                mpz_set(alfa2, alfa);
+                mpz_add_ui(beta, beta, p2);
+                mpz_add_ui(a, a, 1);
+            }
+            */
+
+void factorize2(int p)
+{
+
+    mpz_t M, N, f, t, t2, root;
+    mpz_init(M);
+    mpz_init(N);
+    mpz_init(f);
+    mpz_init(t);
+    mpz_init(t2);
+
+    mpz_set_ui(f, 2 * p + 1);
+
+    // Mersenne
+    mpz_ui_pow_ui(M, 2, p);
+    mpz_sub_ui(M, M, 1);
+
+    mpz_set(N, M); // N=M
+    mpz_set(t, f); // first possible factor 2p+1
+
+    auto start = high_resolution_clock::now();
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<seconds>(stop - start);
+
+    int q;
+    while (true)
+    {
+        stop = high_resolution_clock::now();
+        duration = duration_cast<seconds>(stop - start);
+        if (duration.count() > 10)
+        {
+            mtx.lock();
+            gmp_printf("evaluating: %Zd\n", f);
+            start = high_resolution_clock::now();
+            mtx.unlock();
+        }
+
+        mpz_set(t, f);
+        mpz_set(t2, f);
+
+        while (mpz_cmp(N, t2) > 0)
+        {
+            mpz_set(t, t2);
+            mpz_mul_2exp(t2, t2, 1);
+        }
+
+        mpz_sub(N, N, t);
+
+        q = mpz_cmp(N, f);
+        if (q == 0)
+        {
+            gmp_printf("Factor: %Zd\n", N);
+            return;
+        }
+        else if (q < 0)
+        {
+            mpz_add_ui(f, f, (2 * p));
+            mpz_set(N, M);
+        }
+    }
+}
+
+//   15.729.190.359
+// 7.432.339.208.719
+
+void puzzle(unsigned int p)
+{
+    mpz_t M, root, fa, fb;
+    int p2;
+
+    // inits
+    mpz_inits(M, fa, fb, root);
+
+    p2 = 2 * p;
+
+    // set Mersenne
+    mpz_ui_pow_ui(M, 2, p);
+
+    // root
+    mpz_sqrt(root, M);
+
+    // factors
+    mpz_set_ui(fa, p2 + 1);
+    mpz_set(fb, root);
+    mpz_sub_ui(fb, fb, 1);
+    mpz_div_ui(fb, fb, p2);
+}
+
+void puzzle(unsigned int p, int qq)
+{
+
+    vector<bool> fa; // factor a
+    vector<bool> fb; // factor b
+    vector<bool> r;  // intermediate result;
+    int a;           // factor a index
+    int b;           // factor b index
+    int x;           // factor a index aux
+    int y = 0;       // factor b inde aux
+    int fan;         // factor a in decimal number
+    int fbn;         // factor a in decimal number
+
+    int da; // factor a digits
+    int db; // factor b digits
+    bool c; // carry
+    int t;
+    int limitY = 0;
+
+    // Prepare result set:
+    r.resize(p, 0);
+
+    // Set decimal numeric factor A
+    fan = 1;
+    fbn = 0;
+
+    // main loop.
+    while (true)
+    {
+
+        // Get factor A
+        fan += (2 * p);
+        // digits a=0
+        da = 0;
+
+        // cast to binary factor A
+        fa.clear();
+        t = fan;
+        while (t > 0)
+        {
+            da++; // counting digits A
+            fa.push_back(t & 1);
+            t >>= 1;
+        }
+        db = p - da + 1; // Calculate factor b digits size
+        limitY = pow(2, db - 2) - 1;
+
+        // prepare factor b: form 100000...1
+        fb.clear();
+        fb.push_back(1);
+        for (int i = 0; i < db - 2; i++)
+        {
+            fb.push_back(0);
+        }
+        fb.push_back(1);
+
+        x = 0;
+
+        y = 2 * p + 1;
+        t = 0;
+        while (t < (p / 2))
+        {
+            y += 2 * p;
+        }
+
+        while (y < limitY)
+        {
+            // Across factor a:
+            for (a = 0; a < da; a++)
+            {
+
+                // if digit on position "a" is 1
+                if (fa[a])
+                {
+                    // across factor b
+                    for (b = 0; b < db; b++)
+                    {
+                        if (fb[b]) // if digit on position "b" on factor b is 1
+                        {
+                            if (!r[a + b])
+                            {
+                                r[a + b] = 1;
+                                c = 0;
+                            }
+                            else
+                            {
+                                r[a + b] = 0;
+                                c = 1;
+                            }
+                        }
+
+                        // Evaluate carry
+                        if (c)
+                        {
+                            if (!r[a + b + 1])
+                            {
+                                r[a + b + 1] = 1;
+                                c = 0;
+                            }
+                            else
+                            {
+                                r[a + b + 1] = 0;
+                                c = 1;
+                            }
+                        }
+                    }
+                }
+                // Evaluate if doesn't match with "1" las dgit
+                if (!r[x])
+                {
+                    fb.clear();
+                    fb.push_back(1);
+                    t = y;
+                    while (t > 0)
+                    {
+                        fb.push_back(t & 1);
+                        t >>= 1;
+                    }
+                    while (fb.size() < db)
+                    {
+                        fb.push_back(0);
+                    }
+                    fb.push_back(1);
+
+                    a = -1;
+                    b = -1;
+                    x = -1;
+                    y++;
+                    r.clear();
+                    r.resize(p, 0);
+                }
+                x++;
+            }
+
+            t = 1;
+            for (int i = 0; i < r.size(); i++)
+            {
+                t = t & r[i];
+            }
+            if (t)
+            {
+                goto showResult;
+            }
+        }
+    }
+
+showResult:
+    t = 1;
+    for (int i = 0; i < db; i++)
+    {
+        if (fb[i])
+        {
+            fbn += t;
+        }
+        t *= 2;
+    }
+    printf("%d\n\n%d\n", fan, fbn);
+}
+
+// 36.793.758.459
+// 1.000.000.001
+// 398.069.729.532.862
+void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int &threadsCounter)
+{
+    const int OPERATIONS = 1000000000;
     threadsCounter++; // Increment counter
 
     mpz_t a, b, alfa, beta, tmp, root, end, offsetBeta;
@@ -45,11 +427,12 @@ void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int
     mpz_add(beta, beta, offsetBeta); // beta = beta + betaOffset
 
     mtx.lock();
-    gmp_printf("\nalfa: %Zd / beta:%Zd /a:%Zd /b:%Zd\n", alfa, beta, a, b);
+    gmp_printf("\n*****\n* alfa: %Zd\n* beta:%Zd\n* a:%Zd\n* b:%Zd\n\n", alfa, beta, a, b);
     mtx.unlock();
 
     // take time
     auto start = high_resolution_clock::now();
+    auto stop = high_resolution_clock::now();
     int z = 0;
 
     while (!done)
@@ -61,7 +444,7 @@ void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int
 
             mtx.lock();
             gmp_printf("\na: %Zd\nb: %Zd\n", a, b);
-            auto stop = high_resolution_clock::now();
+            stop = high_resolution_clock::now();
             auto duration = duration_cast<seconds>(stop - start);
             printf("\ntime: %llu\n", duration.count());
             threadsCounter--;
@@ -86,7 +469,7 @@ void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int
         }
 
         z++;
-        if (z == 500000000)
+        if (z == OPERATIONS)
         {
 
             mtx.lock();
@@ -94,7 +477,7 @@ void factorize(unsigned int p, mpz_class begin, mpz_class final, bool &done, int
             auto stop = high_resolution_clock::now();
             auto duration = duration_cast<milliseconds>(stop - start);
             start = high_resolution_clock::now();
-            gmp_printf("\ntime: %llu\na:%Zd", duration.count(), a);
+            gmp_printf("\ntime: %llu a:%Zd\nSpeed: %d", duration.count(), a, OPERATIONS / duration.count());
             mtx.unlock();
         }
     }
@@ -270,6 +653,7 @@ bool test(unsigned int p, unsigned int fa, unsigned int fb)
 int main(int argc, char const *argv[])
 {
 
+    // 1.000.000.001
     /*
      test(11, 23, 89);
     mpz_class fa, fb;
@@ -285,7 +669,12 @@ int main(int argc, char const *argv[])
     int threadsCounter = 0;
     unsigned int p, i, q;
     p = (unsigned int)atoi(argv[1]);
-    q = (unsigned int)atoi(argv[2]);
+    // q = (unsigned int)atoi(argv[2]);
+
+    factorize4(p);
+
+    // puzzle(p);
+    return 0;
 
     MAX_THREADS = q;
 
@@ -315,6 +704,9 @@ int main(int argc, char const *argv[])
                 }
     */
 
+    auto start = high_resolution_clock::now();
+    auto stop = high_resolution_clock::now();
+
     for (int i = 0; i < MAX_THREADS; i++)
     {
         threads.push_back(thread(factorize, p, begin, final, ref(done), ref(threadsCounter)));
@@ -338,6 +730,9 @@ int main(int argc, char const *argv[])
             th.join();
         }
     }
+    stop = high_resolution_clock::now();
+    auto duration = duration_cast<seconds>(stop - start);
+    printf("Total time: %lld seconds.\n", duration.count());
 
     /* code */
     return 0;
