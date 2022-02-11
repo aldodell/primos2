@@ -12,6 +12,161 @@ using namespace chrono;
 
 mutex mtx;
 
+void factorize6(unsigned int p)
+{
+    mpz_t fa, t, p2, r, ft, M;
+
+    unsigned int da, db, dp, x, p1;
+    mpz_init(fa);
+    mpz_init(p2);
+    mpz_init(t);
+    mpz_init(r);
+    mpz_init(ft);
+    mpz_init(M);
+
+    mpz_set_ui(p2, 2 * p);
+    mpz_ui_pow_ui(M, 2, p);
+    mpz_sub_ui(M, M, 1);
+
+    //   da = 0;
+    //  db = 0;
+    p1 = p + 1;
+
+    //  dp = mpz_sizeinbase(fa, 2);
+
+    mpz_set_ui(fa, 1);
+    while (true)
+    {
+    stageA:
+
+        // Construimos el factor A mediante 2p+1
+        //  fa = fa + 2p
+        mpz_add(fa, fa, p2);
+        //   da = mpz_sizeinbase(fa, 2) + 1;
+
+        x = 0; // posicion a evaluar;
+        mpz_set(t, fa);
+        mpz_set_ui(r, 1);
+
+        while (true)
+        {
+        stageB:
+            x++;
+
+            if (x == p1)
+            {
+                goto stageA;
+            }
+
+            /*
+             evaluamos con 0: suponemos que en el factor B, el bit x lo
+            seteamos en cero. Luego, no suma nada al factor temporal T
+            */
+            if (mpz_tstbit(t, x) == 1)
+            {
+                goto stageB;
+            }
+
+            // Evaluamos con 1;
+            // cuando el bit x del factor b est'a en 1 sumamos el factor a desplazad
+            // una posicion a t
+
+            mpz_mul_2exp(ft, fa, x); //<deszplamiento a la izquierda del factor temporal
+            mpz_add(t, t, ft);       // sumamos
+            // Si encontramos el bit a la izquierda con 1 entonces agregamos el bit al resultado
+            // o factor B
+            if (mpz_tstbit(t, x) == 1)
+            {
+                mpz_setbit(r, x);
+                if (mpz_cmp(t, M) == 0)
+                {
+                    goto finalStage;
+                }
+                goto stageB;
+            }
+            else
+            {
+                goto stageA; // evaluamos otro factor
+                // porque ningun valor en el bit x del factor A genera 1 en el factor b en
+                // esta posici'on
+            }
+        }
+    finalStage:
+        gmp_printf("%Zd\n", fa);
+        return;
+    }
+
+    /*
+
+        // Construimos el factor B para que quepa en la cantidad de bits
+        mpz_set_ui(fb, p);
+        db = mpz_sizeinbase(fb, 2);
+        mpz_mul_2exp(fb, fb, p + 1 - da - db);
+        mpz_add_ui(fb, fb, 1);
+        */
+}
+
+void factorize5(unsigned int p)
+{
+
+    mpz_class fa, b, t, fa2, r, z, root, m;
+    int x, i, cycles;
+    long long speed, cyclesBoundry;
+    unsigned int da, dt; // digitios del factor a y del factor temporal a2
+
+    fa = 1;
+    mpz_ui_pow_ui(m.get_mpz_t(), 2, p);
+    m = m - 1;
+
+    auto start = high_resolution_clock::now();
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<milliseconds>(stop - start);
+    cycles = 0;
+    cyclesBoundry = 1000000;
+    // 36158000001
+    while (true)
+    {
+    begin:
+        fa += (2 * p);
+        b = 1;
+        t = fa; // asumiendo que el multicando termina en 1
+        x = 0;
+        r = 1;
+        // da = (int)mpz_sizeinbase(fa.get_mpz_t(), 2);
+        cycles++;
+        if (cycles == cyclesBoundry)
+        {
+            stop = high_resolution_clock::now();
+            duration = duration_cast<milliseconds>(stop - start);
+            speed = cyclesBoundry / duration.count();
+            gmp_printf("Speed: %lld, fa:%Zd\n", speed, fa.get_mpz_t());
+            cycles = 0;
+            start = high_resolution_clock::now();
+        }
+
+        while (true)
+        {
+            if (mpz_tstbit(t.get_mpz_t(), x) == 0)
+            {
+                mpz_mul_2exp(fa2.get_mpz_t(), fa.get_mpz_t(), x);
+                mpz_add(t.get_mpz_t(), t.get_mpz_t(), fa2.get_mpz_t());
+                // dt = (int)mpz_sizeinbase(t.get_mpz_t(), 2);
+                if (mpz_cmp(t.get_mpz_t(), m.get_mpz_t()) > 0)
+                {
+
+                    goto begin;
+                }
+                if (mpz_cmp(t.get_mpz_t(), m.get_mpz_t()) == 0)
+                {
+                    gmp_printf("%Zd\n", fa.get_mpz_t());
+                    return;
+                }
+            }
+            x++;
+        }
+    }
+}
+
 void factorize4(unsigned int p)
 {
 
@@ -671,7 +826,7 @@ int main(int argc, char const *argv[])
     p = (unsigned int)atoi(argv[1]);
     // q = (unsigned int)atoi(argv[2]);
 
-    factorize4(p);
+    factorize6(p);
 
     // puzzle(p);
     return 0;
